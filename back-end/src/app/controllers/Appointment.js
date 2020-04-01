@@ -49,6 +49,8 @@ class AppointmentController {
   }
 
   async index(req, res) {
+    const { page } = req.query;
+
     const appointments = await Appointment.findAll({
       where: {
         userId: req.userId,
@@ -56,6 +58,8 @@ class AppointmentController {
       },
       order: ['date'],
       attributes: ['id', 'date'],
+      limit: 20,
+      offset: (page - 1) * 20,
       include: [
         {
           model: User,
@@ -66,7 +70,7 @@ class AppointmentController {
       ],
     });
 
-    return res.json({ appointments });
+    return res.json(appointments);
   }
 }
 export default new AppointmentController();
