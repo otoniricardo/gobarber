@@ -6,18 +6,25 @@ import User from '../models/User';
 import File from '../models/File';
 import Notification from '../schemas/Notification';
 
-import Mail from '../../lib/Mail';
+import Queue from '../../lib/Queue';
+import CancellationMail from '../jobs/CancellationMail';
 
 class AppointmentController {
   async delete(req, res) {
     const { id } = req.params;
-    const appointment = await Appointment.findByPk(id, {
+    const appointment = await Appointment.findOne({
+      where: { id, canceledAt: null },
       include: [
         { model: User, as: 'provider', attributes: ['name', 'email'] },
         { model: User, as: 'user', attributes: ['name'] },
       ],
       attributes: ['id', 'date', 'userId', 'providerId'],
     });
+
+    if (!appointment)
+      return res.status(400).json({
+        error: 'appointment not found',
+      });
 
     if (appointment.userId !== req.userId)
       return res.status(401).json({
@@ -35,18 +42,19 @@ class AppointmentController {
       canceledAt: new Date(),
     });
 
-    await Mail.sendMail({
-      to: `${appointment.provider.name} <${appointment.provider.email}>`,
-      subject: 'Agendamento Cancelado',
-      template: 'cancellation',
-      context: {
-        provider: appointment.provider.name,
-        user: appointment.user.name,
-        date: format(appointment.date, "'dia' dd 'de' MMMM', às' H:mm'h'", {
-          locale: pt,
-        }),
-      },
-    });
+    await Queue.add(CancellationMail.key, { appointment });
+    // await Mail.sendMail({
+    //   to: `${appointment.provider.name} <${appointment.provider.email}>`,
+    //   subject: 'Agendamento Cancelado',
+    //   template: 'cancellation',
+    //   context: {
+    //     provider: appointment.provider.name,
+    //     user: appointment.user.name,
+    //     date: format(appointment.date, "'dia' dd 'de' MMMM', às' H:mm'h'", {
+    //       locale: pt,
+    //     }),
+    //   },
+    // });
 
     return res.json(canceledAppointment);
   }
